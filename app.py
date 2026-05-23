@@ -41,7 +41,7 @@ class SpotifyLyrics(rumps.App):
 
     # ---------- Spotify via AppleScript ----------
     def applescript(self, script):
-        """Run AppleScript dan return output."""
+        """Run AppleScript and return its output."""
         try:
             result = subprocess.run(
                 ["osascript", "-e", script],
@@ -56,7 +56,7 @@ class SpotifyLyrics(rumps.App):
         return out == "true"
 
     def get_spotify_state(self):
-        """Return dict: {playing, track, artist, position, duration, id} atau None."""
+        """Return dict: {playing, track, artist, position, duration, id} or None."""
         if not self.is_spotify_running():
             return None
         script = '''
@@ -90,13 +90,13 @@ class SpotifyLyrics(rumps.App):
         except (ValueError, IndexError):
             return None
 
-    # ---------- Fetch lyrics dari lrclib.net ----------
+    # ---------- Fetch lyrics from lrclib.net ----------
     def fetch_lyrics(self, track, artist, duration):
-        """Fetch synced lyrics dari lrclib.net. Return list of (seconds, line)."""
+        """Fetch synced lyrics from lrclib.net. Return list of (seconds, line)."""
         try:
-            # Clean track name (buang "feat.", "(Remastered)", dll buat hit rate lebih bagus)
+            # Clean track name (strip "feat.", "(Remastered)", etc. for a better hit rate)
             clean_track = re.sub(r"\s*[\(\[].*?[\)\]]\s*", "", track).strip()
-            clean_artist = artist.split(",")[0].strip()  # Pakai artist pertama aja
+            clean_artist = artist.split(",")[0].strip()  # Use only the first artist
 
             url = (
                 f"https://lrclib.net/api/get"
@@ -106,7 +106,7 @@ class SpotifyLyrics(rumps.App):
             )
             r = requests.get(url, headers=HEADERS, timeout=5)
 
-            # Fallback: kalau gak ketemu dengan duration, coba tanpa
+            # Fallback: if no match with duration, try the search endpoint without it
             if r.status_code != 200:
                 url2 = f"https://lrclib.net/api/search?track_name={quote(clean_track)}&artist_name={quote(clean_artist)}"
                 r2 = requests.get(url2, headers=HEADERS, timeout=5)
@@ -123,7 +123,7 @@ class SpotifyLyrics(rumps.App):
             if synced:
                 return self.parse_lrc(synced), True
             elif plain:
-                # Unsynced fallback: tampilin baris-baris dengan estimasi waktu
+                # Unsynced fallback: distribute lines across the duration with estimated timing
                 lines = [l for l in plain.split("\n") if l.strip()]
                 if not lines or duration <= 0:
                     return [], False
@@ -134,7 +134,7 @@ class SpotifyLyrics(rumps.App):
             return [], False
 
     def parse_lrc(self, lrc_text):
-        """Parse format LRC: [mm:ss.xx] line."""
+        """Parse LRC format: [mm:ss.xx] line."""
         result = []
         pattern = re.compile(r"\[(\d+):(\d+\.?\d*)\](.*)")
         for line in lrc_text.split("\n"):
@@ -144,14 +144,14 @@ class SpotifyLyrics(rumps.App):
                 seconds = float(m.group(2))
                 text = m.group(3).strip()
                 total = minutes * 60 + seconds
-                if text:  # Skip baris kosong
+                if text:  # Skip empty lines
                     result.append((total, text))
         result.sort(key=lambda x: x[0])
         return result
 
     # ---------- Background threads ----------
     def track_watcher(self):
-        """Pantau ganti lagu, lalu fetch lirik baru."""
+        """Watch for track changes and fetch new lyrics."""
         while self.running:
             state = self.get_spotify_state()
             if state and state["id"] != self.current_track_id:
@@ -173,7 +173,7 @@ class SpotifyLyrics(rumps.App):
             time.sleep(TRACK_CHECK_INTERVAL)
 
     def lyrics_updater(self):
-        """Update lirik di menu bar based on posisi lagu."""
+        """Update the menu bar lyric line based on the current song position."""
         while self.running:
             if self.lyrics and self.current_track_id:
                 state = self.get_spotify_state()
@@ -194,8 +194,8 @@ class SpotifyLyrics(rumps.App):
             time.sleep(POLL_INTERVAL)
 
     def force_refresh(self, _):
-        """Manual refresh kalau lirik gak match."""
-        self.current_track_id = None  # Trigger re-fetch di next loop
+        """Manual refresh when the matched lyrics are wrong."""
+        self.current_track_id = None  # Trigger re-fetch on the next loop iteration
 
 
 if __name__ == "__main__":
