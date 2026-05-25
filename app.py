@@ -15,11 +15,18 @@ PLACEHOLDER = "♪ Lyrics"    # Default text when nothing is playing
 # ===================================================================
 
 HEADERS = {
-    "User-Agent": "SpotifyLyricsMenuBar v1.0 (personal use)"
+    "User-Agent": "LyricsMenuBar v1.0 (personal use)"
 }
 
+# Supported macOS players. Spotify returns duration in ms and uses `id`;
+# Apple Music (app name "Music") returns seconds and uses `persistent ID`.
+PLAYERS = [
+    {"name": "Spotify", "duration_divisor": 1000, "id_property": "id"},
+    {"name": "Music",   "duration_divisor": 1,    "id_property": "persistent ID"},
+]
 
-class SpotifyLyrics(rumps.App):
+
+class LyricsMenuBar(rumps.App):
     def __init__(self):
         super().__init__(PLACEHOLDER, quit_button="Quit")
         self.current_track_id = None
@@ -39,7 +46,7 @@ class SpotifyLyrics(rumps.App):
         threading.Thread(target=self.track_watcher, daemon=True).start()
         threading.Thread(target=self.lyrics_updater, daemon=True).start()
 
-    # ---------- Spotify via AppleScript ----------
+    # ---------- Player via AppleScript ----------
     def applescript(self, script):
         """Run AppleScript and return its output."""
         try:
@@ -51,22 +58,23 @@ class SpotifyLyrics(rumps.App):
         except Exception:
             return ""
 
-    def is_spotify_running(self):
-        out = self.applescript('application "Spotify" is running')
+    def is_app_running(self, app_name):
+        out = self.applescript(f'application "{app_name}" is running')
         return out == "true"
 
-    def get_spotify_state(self):
-        """Return dict: {playing, track, artist, position, duration, id} or None."""
-        if not self.is_spotify_running():
+    def get_player_state(self, player):
+        """Read playback state from a single player. Return dict or None."""
+        name = player["name"]
+        if not self.is_app_running(name):
             return None
-        script = '''
-        tell application "Spotify"
+        script = f'''
+        tell application "{name}"
             if player state is playing or player state is paused then
                 set t to name of current track
                 set a to artist of current track
                 set p to player position
-                set d to (duration of current track) / 1000
-                set i to id of current track
+                set d to duration of current track
+                set i to {player["id_property"]} of current track
                 set s to player state as string
                 return t & "||" & a & "||" & p & "||" & d & "||" & i & "||" & s
             else
@@ -79,16 +87,26 @@ class SpotifyLyrics(rumps.App):
             return None
         try:
             parts = out.split("||")
+            duration = float(parts[3].replace(",", ".")) / player["duration_divisor"]
             return {
                 "track": parts[0],
                 "artist": parts[1],
                 "position": float(parts[2].replace(",", ".")),
-                "duration": float(parts[3].replace(",", ".")),
-                "id": parts[4],
+                "duration": duration,
+                "id": f"{name}:{parts[4]}",  # Prefix avoids id collisions across players
                 "playing": parts[5] == "playing",
+                "source": name,
             }
         except (ValueError, IndexError):
             return None
+
+    def get_current_state(self):
+        """Return state from the active player. Prefer a playing one over a paused one."""
+        states = [s for s in (self.get_player_state(p) for p in PLAYERS) if s]
+        for s in states:
+            if s["playing"]:
+                return s
+        return states[0] if states else None
 
     # ---------- Fetch lyrics from lrclib.net ----------
     def fetch_lyrics(self, track, artist, duration):
@@ -153,10 +171,12 @@ class SpotifyLyrics(rumps.App):
     def track_watcher(self):
         """Watch for track changes and fetch new lyrics."""
         while self.running:
-            state = self.get_spotify_state()
+            state = self.get_current_state()
             if state and state["id"] != self.current_track_id:
                 self.current_track_id = state["id"]
-                self.menu["Now Playing: -"].title = f"♪ {state['track']} — {state['artist']}"
+                self.menu["Now Playing: -"].title = (
+                    f"♪ [{state['source']}] {state['track']} — {state['artist']}"
+                )
                 self.title = "Loading lyrics..."
                 lyrics, synced = self.fetch_lyrics(
                     state["track"], state["artist"], state["duration"]
@@ -176,7 +196,7 @@ class SpotifyLyrics(rumps.App):
         """Update the menu bar lyric line based on the current song position."""
         while self.running:
             if self.lyrics and self.current_track_id:
-                state = self.get_spotify_state()
+                state = self.get_current_state()
                 if state and state["playing"]:
                     pos = state["position"]
                     current_line = ""
@@ -199,4 +219,4 @@ class SpotifyLyrics(rumps.App):
 
 
 if __name__ == "__main__":
-    SpotifyLyrics().run()
+    LyricsMenuBar().run()
