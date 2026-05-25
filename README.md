@@ -17,50 +17,28 @@ You don't need to install Xcode, Python, or anything else. Just download the app
 Head to the [**Releases page**](../../releases/latest) and download **`LyricsMenuBar.dmg`**.
 
 ### 2. Install
+  1. Download `LyricsMenuBar.dmg` below
+  2. Open it, drag the app to Applications
+  3. Right-click the app in Applications → click "Open Anyway"
+  4. If "Open Anyway" button not displayed, go to System Settings -> Privacy & Security
+  5. Scroll down until you find this
+<img width="476" height="100" alt="Screenshot 2026-05-25 at 20 54 47" src="https://github.com/user-attachments/assets/e85c9461-a168-45b3-87cf-e857b8d4c819" />
 
-1. Double-click the downloaded `LyricsMenuBar.dmg`.
-2. A small window opens with the app icon and an **Applications** shortcut. **Drag** `LyricsMenuBar` into the **Applications** folder.
-3. Eject the disk image (drag it to Trash from the Finder sidebar, or right-click → Eject).
+6. Click "Open Anyway"
+7. Confirm it using your password or touch id
+8. Then it should appear "Open Anyway" button like displayed image. Click that
+<img width="254" height="342" alt="Screenshot 2026-05-25 at 20 54 54" src="https://github.com/user-attachments/assets/2f29b907-9124-4b9e-82e0-90ee39b27653" />
+  
+9. And voila it works!
+<img width="328" height="133" alt="Screenshot 2026-05-25 at 20 56 48" src="https://github.com/user-attachments/assets/250453c3-39fd-4064-8bbd-bb5e59856bd6" />
 
-### 3. First launch (important!)
+### 3. Iimportant!
 
 Because this app is open-source and not paid into Apple's $99/year developer program, macOS will refuse to open it the first time and show a warning like:
 
 > *"LyricsMenuBar" cannot be opened because Apple cannot check it for malicious software.*
 
-That's just macOS being cautious — it doesn't mean anything is wrong. To open the app the first time:
-
-1. Open **Finder → Applications**.
-2. **Right-click** (or Control-click) on `LyricsMenuBar` → choose **Open**.
-3. A new dialog appears with an **Open** button — click it.
-4. From now on, the app launches normally.
-
-> If you instead see *"LyricsMenuBar is damaged and can't be opened"*, your browser stripped the signature during download. Fix it with this command in **Terminal**:
-> ```bash
-> xattr -cr /Applications/LyricsMenuBar.app
-> ```
-> Then try the right-click → Open step again.
-
-### 4. Grant permission to read Spotify / Music
-
-The first time you play a song, macOS will pop up:
-
-> *"LyricsMenuBar" wants access to control "Spotify".*
-
-Click **OK**. (Same dialog appears for the Music app if you use that.)
-
-You can review or revoke this later in **System Settings → Privacy & Security → Automation**.
-
-### 5. Auto-start at login (optional)
-
-Want the app to launch every time you log in?
-
-1. Open **System Settings → General → Login Items & Extensions**.
-2. Under **Open at Login**, click **+** and choose `LyricsMenuBar.app`.
-
-Done.
-
----
+That's just macOS being cautious — it doesn't mean anything is wrong.
 
 ## How It Works
 
@@ -158,59 +136,7 @@ Tweak the constants at the top of [`Sources/LyricsMenuBar/MenuBarController.swif
 
 To add or remove player sources, edit `PlayerReader.players` in [`Sources/LyricsMenuBar/PlayerReader.swift`](Sources/LyricsMenuBar/PlayerReader.swift). Rebuild after editing.
 
----
-
-## Advanced: Auto-Restart with LaunchAgent
-
-If you want the app to restart automatically when it crashes or gets quit (more aggressive than Login Items), register it as a LaunchAgent.
-
-### 1. Create the plist
-
-Save this as `~/Library/LaunchAgents/com.user.lyricsmenubar.plist`. **Replace `/Users/YOURNAME` with your actual home directory.**
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.user.lyricsmenubar</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/LyricsMenuBar.app/Contents/MacOS/LyricsMenuBar</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/YOURNAME/Library/Logs/LyricsMenuBar/stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOURNAME/Library/Logs/LyricsMenuBar/stderr.log</string>
-    <key>ProcessType</key>
-    <string>Interactive</string>
-</dict>
-</plist>
-```
-
-### 2. Load it
-
-```bash
-mkdir -p ~/Library/Logs/LyricsMenuBar
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.lyricsmenubar.plist
-```
-
-### 3. Management
-
-| Action | Command |
-| --- | --- |
-| Stop and unload | `launchctl bootout gui/$(id -u)/com.user.lyricsmenubar` |
-| Restart | `launchctl kickstart -k gui/$(id -u)/com.user.lyricsmenubar` |
-| Tail logs | `tail -f ~/Library/Logs/LyricsMenuBar/stderr.log` |
-
-> `KeepAlive: true` makes launchd restart the app no matter how it exits. To truly stop it, use `launchctl bootout` — `kill` alone will be undone within a second.
-
----
+--
 
 ## Notes
 
