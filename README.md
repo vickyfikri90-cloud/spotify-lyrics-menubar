@@ -1,10 +1,66 @@
 # Lyrics Menu Bar
 
-A lightweight native macOS menu bar app that shows time-synced lyrics for the song currently playing in **Spotify** or **Apple Music** — no login or API key required.
+A lightweight native macOS menu bar app that shows time-synced lyrics for the song currently playing in **Spotify** or **Apple Music** — no login, no API key, no setup beyond a couple of clicks.
 
 ![macOS](https://img.shields.io/badge/macOS-12%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 
-Built with Swift + AppKit. Uses ~50 MB of RAM, negligible CPU.
+Built natively with Swift + AppKit. Uses ~50 MB of RAM, negligible CPU.
+
+---
+
+## Download & Install (for everyone)
+
+You don't need to install Xcode, Python, or anything else. Just download the app.
+
+### 1. Download the latest release
+
+Head to the [**Releases page**](../../releases/latest) and download **`LyricsMenuBar.dmg`**.
+
+### 2. Install
+
+1. Double-click the downloaded `LyricsMenuBar.dmg`.
+2. A small window opens with the app icon and an **Applications** shortcut. **Drag** `LyricsMenuBar` into the **Applications** folder.
+3. Eject the disk image (drag it to Trash from the Finder sidebar, or right-click → Eject).
+
+### 3. First launch (important!)
+
+Because this app is open-source and not paid into Apple's $99/year developer program, macOS will refuse to open it the first time and show a warning like:
+
+> *"LyricsMenuBar" cannot be opened because Apple cannot check it for malicious software.*
+
+That's just macOS being cautious — it doesn't mean anything is wrong. To open the app the first time:
+
+1. Open **Finder → Applications**.
+2. **Right-click** (or Control-click) on `LyricsMenuBar` → choose **Open**.
+3. A new dialog appears with an **Open** button — click it.
+4. From now on, the app launches normally.
+
+> If you instead see *"LyricsMenuBar is damaged and can't be opened"*, your browser stripped the signature during download. Fix it with this command in **Terminal**:
+> ```bash
+> xattr -cr /Applications/LyricsMenuBar.app
+> ```
+> Then try the right-click → Open step again.
+
+### 4. Grant permission to read Spotify / Music
+
+The first time you play a song, macOS will pop up:
+
+> *"LyricsMenuBar" wants access to control "Spotify".*
+
+Click **OK**. (Same dialog appears for the Music app if you use that.)
+
+You can review or revoke this later in **System Settings → Privacy & Security → Automation**.
+
+### 5. Auto-start at login (optional)
+
+Want the app to launch every time you log in?
+
+1. Open **System Settings → General → Login Items & Extensions**.
+2. Under **Open at Login**, click **+** and choose `LyricsMenuBar.app`.
+
+Done.
+
+---
 
 ## How It Works
 
@@ -13,73 +69,9 @@ Built with Swift + AppKit. Uses ~50 MB of RAM, negligible CPU.
 - Fetches synced lyrics from [lrclib.net](https://lrclib.net) (falls back to plain lyrics with estimated timing when no synced version exists).
 - Updates the menu bar title in real time as the song progresses.
 
-## Requirements
-
-- macOS 12 (Monterey) or newer
-- The **Spotify desktop app** and/or the **Music app** (web players are not supported)
-- An internet connection (lyrics are fetched on demand)
-- **To build from source**: Xcode Command Line Tools (`xcode-select --install`) — no full Xcode required
-
----
-
-## Quick Start (Build from Source)
-
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/<your-fork>/lyrics-menubar.git
-cd lyrics-menubar
-```
-
-### 2. Build the .app
-
-```bash
-./build.sh
-```
-
-This runs `swift build -c release`, assembles a `.app` bundle, and applies ad-hoc code signing. Output: `LyricsMenuBar.app` in the project root.
-
-### 3. Move it to /Applications (optional but recommended)
-
-```bash
-mv LyricsMenuBar.app /Applications/
-```
-
-### 4. Launch
-
-```bash
-open /Applications/LyricsMenuBar.app
-```
-
-You'll see a `♪ Lyrics` icon appear in the menu bar. Play a song in Spotify or Music and the title updates to the current lyric line.
-
-### 5. Grant Automation permission (first run only)
-
-The first time the app reads playback state, macOS will pop up:
-
-> "LyricsMenuBar" wants access to control "Spotify".
-
-Click **OK**. You can review or change this later in **System Settings → Privacy & Security → Automation**.
-
-> **Note:** Because the build is ad-hoc signed, macOS Gatekeeper may show "cannot be opened" on the first launch. Either right-click → **Open**, or go to **System Settings → Privacy & Security** and click **Open Anyway**.
-
----
-
-## Auto-Start at Login
-
-The easiest way — no scripts or plists needed:
-
-1. Open **System Settings → General → Login Items & Extensions**.
-2. Under **Open at Login**, click `+` and choose `LyricsMenuBar.app`.
-3. Done. The app will launch every time you log in.
-
-If you prefer a LaunchAgent (auto-restart on crash, more control), see [Advanced: LaunchAgent](#advanced-launchagent) below.
-
----
-
 ## Menu Actions
 
-Click the menu bar title to open the menu:
+Click the lyric in the menu bar to open the menu:
 
 | Item | Action |
 | --- | --- |
@@ -89,7 +81,71 @@ Click the menu bar title to open the menu:
 
 ---
 
-## Configuration
+## Troubleshooting
+
+**Nothing appears in the menu bar.**
+Check the process is running: open Terminal and run `pgrep -f LyricsMenuBar`. If it's empty, launch the app from `/Applications` again and watch for any macOS dialogs.
+
+**Title stuck at "Loading lyrics…".**
+The track probably isn't on lrclib.net. Click the icon → **Refresh Lyrics**. Or test the API in Terminal:
+
+```bash
+curl "https://lrclib.net/api/get?track_name=SONG&artist_name=ARTIST&duration=240"
+```
+
+If it returns `404`, the song isn't in lrclib's database yet — you can [contribute it](https://lrclib.net/publish).
+
+**Title shows "♪ (no lyrics found)".**
+Same as above — lrclib doesn't have lyrics for that track yet.
+
+**"LyricsMenuBar" can't control Spotify / Music.**
+Open **System Settings → Privacy & Security → Automation** and tick the **Spotify** (and/or **Music**) checkbox under `LyricsMenuBar`. If you don't see it listed, quit and relaunch the app — macOS will prompt again.
+
+**Lyrics are out of sync.**
+- For synced LRC lyrics, timing comes from lrclib — try **Refresh Lyrics**; a better version may exist.
+- For plain lyrics (fallback), the app distributes lines evenly across the track duration, so accuracy is approximate.
+
+---
+
+## Build from Source (for developers)
+
+### Requirements
+
+- macOS 12 (Monterey) or newer
+- Xcode Command Line Tools: `xcode-select --install`
+
+### Build
+
+```bash
+git clone https://github.com/nadialvy/spotify-lyrics-menubar.git
+cd spotify-lyrics-menubar
+./build.sh
+```
+
+This:
+1. Runs `swift build -c release`
+2. Assembles `LyricsMenuBar.app`
+3. Ad-hoc code signs it
+4. Produces `LyricsMenuBar.dmg` for distribution
+
+To skip the DMG step (faster during development): `./build.sh --no-dmg`
+
+### Project Layout
+
+```
+.
+├── Package.swift                            # Swift Package Manager manifest
+├── Info.plist                               # Bundle metadata (LSUIElement = background app)
+├── build.sh                                 # Compile + assemble .app + create .dmg
+├── Sources/LyricsMenuBar/
+│   ├── main.swift                           # Entry point + AppDelegate
+│   ├── MenuBarController.swift              # NSStatusItem + timer + menu
+│   ├── PlayerReader.swift                   # AppleScript bridge to Spotify/Music
+│   └── LyricsFetcher.swift                  # HTTP to lrclib.net + LRC parser
+└── LyricsMenuBar.app/                       # Built bundle (gitignored)
+```
+
+### Configuration
 
 Tweak the constants at the top of [`Sources/LyricsMenuBar/MenuBarController.swift`](Sources/LyricsMenuBar/MenuBarController.swift):
 
@@ -100,36 +156,13 @@ Tweak the constants at the top of [`Sources/LyricsMenuBar/MenuBarController.swif
 | `pollInterval` | How often (seconds) to refresh the displayed lyric line |
 | `trackCheckInterval` | How often (seconds) to check whether the track changed |
 
-To add or remove player sources, edit `PlayerReader.players` in [`Sources/LyricsMenuBar/PlayerReader.swift`](Sources/LyricsMenuBar/PlayerReader.swift).
-
-After editing, rebuild:
-
-```bash
-./build.sh
-```
+To add or remove player sources, edit `PlayerReader.players` in [`Sources/LyricsMenuBar/PlayerReader.swift`](Sources/LyricsMenuBar/PlayerReader.swift). Rebuild after editing.
 
 ---
 
-## Project Layout
+## Advanced: Auto-Restart with LaunchAgent
 
-```
-.
-├── Package.swift                            # Swift Package Manager manifest
-├── Info.plist                               # Bundle metadata (LSUIElement = background app)
-├── build.sh                                 # Compile + assemble .app
-├── Sources/LyricsMenuBar/
-│   ├── main.swift                           # Entry point + AppDelegate
-│   ├── MenuBarController.swift              # NSStatusItem + timer + menu
-│   ├── PlayerReader.swift                   # AppleScript bridge to Spotify/Music
-│   └── LyricsFetcher.swift                  # HTTP to lrclib.net + LRC parser
-└── LyricsMenuBar.app/                       # Built bundle (gitignored)
-```
-
----
-
-## Advanced: LaunchAgent
-
-If you want the app to restart automatically when it crashes or is quit, register it as a LaunchAgent instead of using Login Items.
+If you want the app to restart automatically when it crashes or gets quit (more aggressive than Login Items), register it as a LaunchAgent.
 
 ### 1. Create the plist
 
@@ -160,51 +193,22 @@ Save this as `~/Library/LaunchAgents/com.user.lyricsmenubar.plist`. **Replace `/
 </plist>
 ```
 
-### 2. Create the log directory and load the agent
+### 2. Load it
 
 ```bash
 mkdir -p ~/Library/Logs/LyricsMenuBar
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.lyricsmenubar.plist
 ```
 
-### 3. Management commands
+### 3. Management
 
 | Action | Command |
 | --- | --- |
 | Stop and unload | `launchctl bootout gui/$(id -u)/com.user.lyricsmenubar` |
-| Restart the running app | `launchctl kickstart -k gui/$(id -u)/com.user.lyricsmenubar` |
+| Restart | `launchctl kickstart -k gui/$(id -u)/com.user.lyricsmenubar` |
 | Tail logs | `tail -f ~/Library/Logs/LyricsMenuBar/stderr.log` |
 
-> **Important:** `KeepAlive: true` makes the agent restart the app no matter how it exits. If you ever want to truly stop it, use `launchctl bootout` — `kill` alone will be undone within a second.
-
----
-
-## Troubleshooting
-
-**Nothing appears in the menu bar.**
-Check the process is running: `pgrep -f LyricsMenuBar`. If empty, launch again with `open /Applications/LyricsMenuBar.app` and watch for any macOS dialogs.
-
-**"LyricsMenuBar can't be opened because Apple cannot check it for malicious software."**
-The build is ad-hoc signed (no developer certificate). Either right-click the `.app` → **Open** and confirm once, or open **System Settings → Privacy & Security** and click **Open Anyway** under the warning.
-
-**Title stuck at "Loading lyrics…".**
-The track may not exist on lrclib.net. Click the icon → **Refresh Lyrics**. Or test the API:
-
-```bash
-curl "https://lrclib.net/api/get?track_name=SONG&artist_name=ARTIST&duration=240"
-```
-
-If you get `404`, the song isn't in the database yet — you can [contribute it](https://lrclib.net/publish).
-
-**Title shows "♪ (no lyrics found)".**
-Same as above — lrclib doesn't have it.
-
-**"LyricsMenuBar" can't control Spotify / Music.**
-Open **System Settings → Privacy & Security → Automation** and tick the Spotify (and/or Music) checkbox under `LyricsMenuBar`. If you don't see it listed, launch the app fresh so macOS prompts you.
-
-**Lyrics are out of sync.**
-- For synced LRC lyrics, the timing comes from lrclib — try **Refresh Lyrics** in case a better version is available.
-- For plain lyrics, the app distributes lines evenly across the track duration, so accuracy is approximate.
+> `KeepAlive: true` makes launchd restart the app no matter how it exits. To truly stop it, use `launchctl bootout` — `kill` alone will be undone within a second.
 
 ---
 
@@ -213,3 +217,4 @@ Open **System Settings → Privacy & Security → Automation** and tick the Spot
 - Lyrics availability depends on the [lrclib.net](https://lrclib.net) community database; some tracks may not be found.
 - The app polls Spotify/Music locally via AppleScript — your listening data never leaves your machine.
 - CPU usage is negligible (~0.4%); memory is ~50 MB resident.
+- Built with Swift 6 + AppKit. No Python, no Electron, no Node.
