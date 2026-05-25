@@ -131,8 +131,7 @@ Tweak the constants at the top of [`Sources/LyricsMenuBar/MenuBarController.swif
 | --- | --- |
 | `placeholder` | Text shown when nothing is playing |
 | `maxChars` | Max characters shown in the menu bar before truncation |
-| `pollInterval` | How often (seconds) to refresh the displayed lyric line |
-| `trackCheckInterval` | How often (seconds) to check whether the track changed |
+| `pollInterval` | How often (seconds) to poll the player and refresh the lyric line |
 
 To add or remove player sources, edit `PlayerReader.players` in [`Sources/LyricsMenuBar/PlayerReader.swift`](Sources/LyricsMenuBar/PlayerReader.swift). Rebuild after editing.
 

@@ -3,8 +3,7 @@ import Cocoa
 final class MenuBarController {
     private let placeholder = "♪ Lyrics"
     private let maxChars = 70
-    private let pollInterval: TimeInterval = 0.4
-    private let trackCheckInterval: TimeInterval = 2.0
+    private let pollInterval: TimeInterval = 0.5
 
     private let statusItem: NSStatusItem
     private let nowPlayingItem: NSMenuItem
@@ -13,9 +12,9 @@ final class MenuBarController {
     private var lyrics: [LyricLine] = []
     private var lastDisplayed: String = ""
 
-    private var trackTimer: Timer?
-    private var lyricsTimer: Timer?
-    private let workQueue = DispatchQueue(label: "lyrics.work", qos: .utility)
+    private var pollTimer: Timer?
+    private let pollQueue = DispatchQueue(label: "lyrics.poll", qos: .userInitiated)
+    private let fetchQueue = DispatchQueue(label: "lyrics.fetch", qos: .utility)
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -39,30 +38,28 @@ final class MenuBarController {
         ))
         statusItem.menu = menu
 
-        trackTimer = Timer.scheduledTimer(withTimeInterval: trackCheckInterval, repeats: true) { [weak self] _ in
-            self?.checkTrack()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
+            self?.poll()
         }
-        lyricsTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
-            self?.updateLyric()
-        }
-        DispatchQueue.main.async { [weak self] in self?.checkTrack() }
+        DispatchQueue.main.async { [weak self] in self?.poll() }
     }
 
     @objc private func forceRefresh() {
         currentTrackID = nil
+        lyrics = []
+        lastDisplayed = ""
     }
 
-    private func checkTrack() {
-        workQueue.async { [weak self] in
-            guard let self = self else { return }
+    private func poll() {
+        pollQueue.async { [weak self] in
             let state = PlayerReader.currentState()
             DispatchQueue.main.async {
-                self.handleTrackUpdate(state)
+                self?.handle(state: state)
             }
         }
     }
 
-    private func handleTrackUpdate(_ state: PlayerState?) {
+    private func handle(state: PlayerState?) {
         guard let state = state else {
             if currentTrackID != nil {
                 currentTrackID = nil
@@ -73,19 +70,47 @@ final class MenuBarController {
             }
             return
         }
-        guard state.id != currentTrackID else { return }
 
-        currentTrackID = state.id
-        lyrics = []
-        lastDisplayed = ""
-        nowPlayingItem.title = "♪ [\(state.source)] \(state.track) — \(state.artist)"
-        statusItem.button?.title = "Loading lyrics..."
+        if state.id != currentTrackID {
+            currentTrackID = state.id
+            lyrics = []
+            lastDisplayed = ""
+            nowPlayingItem.title = "♪ [\(state.source)] \(state.track) — \(state.artist)"
+            statusItem.button?.title = "Loading lyrics..."
+            startFetch(track: state.track, artist: state.artist, duration: state.duration, trackID: state.id)
+            return
+        }
 
-        let track = state.track
-        let artist = state.artist
-        let duration = state.duration
-        let trackID = state.id
-        workQueue.async { [weak self] in
+        guard state.playing, !lyrics.isEmpty else { return }
+
+        var currentLine = ""
+        for line in lyrics {
+            if line.time <= state.position {
+                currentLine = line.text
+            } else {
+                break
+            }
+        }
+
+        if currentLine.isEmpty {
+            if !lastDisplayed.isEmpty {
+                statusItem.button?.title = placeholder
+                lastDisplayed = ""
+            }
+            return
+        }
+
+        guard currentLine != lastDisplayed else { return }
+        var display = currentLine
+        if display.count > maxChars {
+            display = String(display.prefix(maxChars - 1)) + "…"
+        }
+        statusItem.button?.title = display
+        lastDisplayed = currentLine
+    }
+
+    private func startFetch(track: String, artist: String, duration: Double, trackID: String) {
+        fetchQueue.async { [weak self] in
             let (lines, _) = LyricsFetcher.fetch(track: track, artist: artist, duration: duration)
             DispatchQueue.main.async {
                 guard let self = self, self.currentTrackID == trackID else { return }
@@ -93,32 +118,6 @@ final class MenuBarController {
                 if lines.isEmpty {
                     self.statusItem.button?.title = "♪ (no lyrics found)"
                 }
-            }
-        }
-    }
-
-    private func updateLyric() {
-        guard !lyrics.isEmpty, currentTrackID != nil else { return }
-        let snapshot = lyrics
-        workQueue.async { [weak self] in
-            guard let state = PlayerReader.currentState(), state.playing else { return }
-            var currentLine = ""
-            for line in snapshot {
-                if line.time <= state.position {
-                    currentLine = line.text
-                } else {
-                    break
-                }
-            }
-            guard !currentLine.isEmpty else { return }
-            DispatchQueue.main.async {
-                guard let self = self, currentLine != self.lastDisplayed else { return }
-                var display = currentLine
-                if display.count > self.maxChars {
-                    display = String(display.prefix(self.maxChars - 1)) + "…"
-                }
-                self.statusItem.button?.title = display
-                self.lastDisplayed = currentLine
             }
         }
     }
