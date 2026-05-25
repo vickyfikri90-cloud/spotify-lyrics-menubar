@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+*.xcodeproj/
+LyricsMenuBar.app/
+.DS_Store
