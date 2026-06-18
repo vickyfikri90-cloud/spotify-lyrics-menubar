@@ -15,12 +15,19 @@ private struct LyricsResponse: Decodable {
 }
 
 enum LyricsFetcher {
+    private static let requestTimeout: TimeInterval = 15
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 5
-        config.timeoutIntervalForResource = 6
+        config.timeoutIntervalForRequest = requestTimeout
+        config.timeoutIntervalForResource = requestTimeout
         return URLSession(configuration: config)
     }()
+
+    private enum FetchOutcome {
+        case success(Data)
+        case httpError(Int)
+        case transient
+    }
 
     private static let lrcRegex = try! NSRegularExpression(pattern: #"\[(\d+):(\d+\.?\d*)\](.*)"#)
 
@@ -77,19 +84,37 @@ enum LyricsFetcher {
     }
 
     private static func fetchSync(url: URL) -> Data? {
+        for _ in 1...2 {
+            switch fetchOnce(url: url) {
+            case .success(let data): return data
+            case .httpError: return nil
+            case .transient: continue
+            }
+        }
+        return nil
+    }
+
+    private static func fetchOnce(url: URL) -> FetchOutcome {
         var request = URLRequest(url: url)
         request.setValue("LyricsMenuBar v2.0 (personal use)", forHTTPHeaderField: "User-Agent")
         let semaphore = DispatchSemaphore(value: 0)
-        var result: Data?
+        var outcome: FetchOutcome = .transient
         let task = session.dataTask(with: request) { data, response, _ in
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                result = data
+            if let http = response as? HTTPURLResponse {
+                if http.statusCode == 200, let data = data {
+                    outcome = .success(data)
+                } else {
+                    outcome = .httpError(http.statusCode)
+                }
             }
             semaphore.signal()
         }
         task.resume()
-        _ = semaphore.wait(timeout: .now() + 6)
-        return result
+        if semaphore.wait(timeout: .now() + requestTimeout + 1) == .timedOut {
+            task.cancel()
+            return .transient
+        }
+        return outcome
     }
 
     private static func parseLRC(_ text: String) -> [LyricLine] {
